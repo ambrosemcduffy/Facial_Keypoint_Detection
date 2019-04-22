@@ -16,9 +16,9 @@ image_path_test = "data/test/"
 # HaarCascade path
 cas_path = "data/detector_architectures/haarcascade_frontalface_default.xml"
 # Validation set on my face...
-random_paths = "data/valid/"
+validation_path = "data/valid/chadwick/"
 dims = 96
-def Model(dims=96,batch_size=16,epochs=5):
+def Model(dims=96,batch_size=64,epochs=5):
       '''
       Fuction that runs Vgg16 architecture until it's optimize
       '''
@@ -86,6 +86,8 @@ def Model(dims=96,batch_size=16,epochs=5):
             model.add((Dropout(.1)))
             model.add(Dense(1024, activation="relu"))
             model.add((Dropout(.25)))
+            model.add(Dense(2048, activation="relu"))
+            model.add((Dropout(.3)))
             model.add(Dense(136,activation=None))
             model.summary()
             return model
@@ -102,21 +104,10 @@ def Model(dims=96,batch_size=16,epochs=5):
             hist = model.fit(inputs,keypoints,batch_size=batch_size,epochs=epochs,callbacks=[checkpoint],verbose=1,shuffle=True,validation_split=.1)
             score = model.evaluate(inputs_test,keypoints_test, verbose = 0)
             accuracy = 100*score[1]
-            return model,hist,accuracy
-      model,hist,accuracy = Train()
-      return model, hist, accuracy
-model,hist,accuracy = Model(epochs = 55)
-
-def faceCascade(cas_path,index):
-      p = 9
-      image = TestData(random_paths,dims,index)
-      face_cascade = cv2.CascadeClassifier(cas_path)
-      faces = face_cascade.detectMultiScale(image,1.2,1)
-      image_w_detect = image.copy()
-      for (x,y,w,h) in faces:
-            cv2.rectangle(image_w_detect,(x,y),(x+w,y+h),(255,0,0),1)
-      plt.imshow(image_w_detect)
-      return image[y-p:y+h+p,x-p:x+w+p]
+            return model,hist,accuracy,score
+      model,hist,accuracy,score = Train()
+      return model, hist, accuracy,score
+model,hist,accuracy,score = Model(epochs = 50)
 
 def Plot_results(model,hist,accuracy):
       '''
@@ -130,30 +121,44 @@ def Plot_results(model,hist,accuracy):
       plt.legend(['train', 'test'], loc='upper left')
       plt.show()
       print("The results accuracy of theis model is {}".format(accuracy))
-Plot_results(model,hist,accuracy)
 
-def TestData(rand_path,dims,index):
-      '''
-      importing in data for testing
-      resizing the image
-      making the img into an nxnx1 array
-      '''
-      image_,_ = DataLoader(rand_path,resize_image=True,dims=(dims,dims)).import_image()
-      plt.imshow(image_[index])
-      gray_image = cv2.cvtColor(image_[index], cv2.COLOR_RGB2GRAY)
-      plt.imshow(gray_image, cmap="gray")
-      return gray_image
+
+# importing validation images to test on assuming the are same dimensions..
+val_set,_ = DataLoader(validation_path,resize_image=False,dims=(dims,dims)).import_image()
+# applying the face detector on my images
+def faceCascade(cas_path,images,index):
+      p = 60
+      face_cascade = cv2.CascadeClassifier(cas_path)
+      img = images[index]
+      gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+      faces = face_cascade.detectMultiScale(gray,1.3,10)
+      if len(faces) > 0:
+            print("detected " + str(len(faces)) + " faces")
+            # copying the image
+            image_w_detect = img.copy()
+            # looping of the detection
+            for (x,y,w,h) in faces:
+                  # creating rectangle Region of interest around the image
+                  cv2.rectangle(image_w_detect,(x,y),(x+w,y+h),(255,0,0),10)
+            # cropping with the detected region with a padding of p
+            img_crop = img[y-p:y+h+p,x-p:x+w+p]
+            # resizing the image to become 96x96x3
+            img_resize = img_crop.copy()
+            img_resize = cv2.resize(img_resize,(96,96))
+            return img_resize
 
 def Predict_(index,dims=96):
       '''
       predicting an image, index will index into the dataset for an image
       '''
       # Importing in show keypoints
-      pp = Preprocess(csv_path, image_path)
+      pp = Preprocess(csv_path,image_path)
       # Importing in test data
-      roi = faceCascade(cas_path,index)
-      print(roi.shape)
-      image = cv2.resize(roi,(96,96))
+      roi = faceCascade(cas_path,val_set,index)
+      gray = roi.copy()
+      gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+      image = gray
+      print(image.shape)
       #reshaping the shape
       image = image.reshape(1,image.shape[0],image.shape[1],1)
       #loading the weights
@@ -163,6 +168,7 @@ def Predict_(index,dims=96):
       #reshaping the prediction
       pred = pred.reshape(pred.shape[0],68,-1)*50+100
       # showing results
-      pp.show_keypoints(image.squeeze(),pred[0])
+      pp.show_keypoints(image.squeeze(),pred.squeeze())
       return pred,image,roi
-pred,image,roi = Predict_(2)
+pred,image,roi = Predict_(100)
+Plot_results(model,hist,accuracy)
