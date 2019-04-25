@@ -2,6 +2,7 @@ from KeypointHelper import Preprocess
 from ambrose_flow import DataLoader
 from keras.models import Sequential
 from keras.layers import Flatten,Dense,Dropout,Conv2D, MaxPool2D
+from keras import optimizers
 from keras.callbacks import ModelCheckpoint
 from keras import backend as K
 import numpy as np
@@ -18,7 +19,7 @@ cas_path = "data/detector_architectures/haarcascade_frontalface_default.xml"
 # Validation set on my face...
 validation_path = "data/valid/chadwick/"
 dims = 96
-def Model(dims=96,batch_size=64,epochs=5):
+def Model(dims=96,batch_size=16,epochs=5):
       '''
       Fuction that runs Vgg16 architecture until it's optimize
       '''
@@ -73,21 +74,17 @@ def Model(dims=96,batch_size=64,epochs=5):
             '''
             # Building the Architecture
             model = Sequential()
-            model.add(Conv2D(32,(3,3), input_shape =[dims,dims,1],activation="relu"))
+            model.add(Conv2D(64,(2,2), padding = "same", input_shape =[dims,dims,1],activation="relu"))
             model.add(MaxPool2D(2,2))
-            model.add(Conv2D(64,(3,3),activation="relu"))
+            model.add(Conv2D(128, (2,2), padding="same",activation="relu"))
             model.add(MaxPool2D(2,2))
-            model.add(Conv2D(128, (3,3),activation="relu"))
+            model.add(Conv2D(256,(3,3),padding = "same", activation="relu"))
             model.add(MaxPool2D(2,2))
-            model.add(Conv2D(256,(3,3), activation="relu"))
+            model.add(Conv2D(512,(3,3), padding = "same",activation="relu"))
             model.add(MaxPool2D(2,2))
             model.add(Flatten())
-            model.add(Dense(512, activation="relu"))
-            model.add((Dropout(.1)))
             model.add(Dense(1024, activation="relu"))
-            model.add((Dropout(.25)))
-            model.add(Dense(2048, activation="relu"))
-            model.add((Dropout(.3)))
+            model.add(Dropout(rate = .2))
             model.add(Dense(136,activation=None))
             model.summary()
             return model
@@ -99,7 +96,8 @@ def Model(dims=96,batch_size=64,epochs=5):
             '''
             inputs, inputs_test, keypoints,keypoints_test = Preprocess_data()
             model = Architecture()
-            model.compile(loss=root_mean_squared_error, optimizer="adam", metrics=["accuracy"])
+            nadam = optimizers.Nadam(lr=0.001)
+            model.compile(loss= "mean_squared_error", optimizer=nadam, metrics=["accuracy"])
             checkpoint = ModelCheckpoint(image_path+"new.model.best.hdf5",verbose=1,save_best_only=True)
             hist = model.fit(inputs,keypoints,batch_size=batch_size,epochs=epochs,callbacks=[checkpoint],verbose=1,shuffle=True,validation_split=.1)
             score = model.evaluate(inputs_test,keypoints_test, verbose = 0)
@@ -107,7 +105,7 @@ def Model(dims=96,batch_size=64,epochs=5):
             return model,hist,accuracy,score
       model,hist,accuracy,score = Train()
       return model, hist, accuracy,score
-model,hist,accuracy,score = Model(epochs = 50)
+model,hist,accuracy,score = Model(epochs = 60)
 
 def Plot_results(model,hist,accuracy):
       '''
@@ -120,8 +118,8 @@ def Plot_results(model,hist,accuracy):
       plt.xlabel('epoch')
       plt.legend(['train', 'test'], loc='upper left')
       plt.show()
-      print("The results accuracy of theis model is {}".format(accuracy))
-
+      print("The results accuracy of the is model is {}".format(accuracy))
+Plot_results(model,hist,accuracy)
 
 # importing validation images to test on assuming the are same dimensions..
 val_set,_ = DataLoader(validation_path,resize_image=False,dims=(dims,dims)).import_image()
@@ -146,7 +144,7 @@ def faceCascade(cas_path,images,index):
             img_resize = img_crop.copy()
             img_resize = cv2.resize(img_resize,(96,96))
             return img_resize
-
+roi = faceCascade(cas_path,val_set,0)
 def Predict_(index,dims=96):
       '''
       predicting an image, index will index into the dataset for an image
@@ -170,5 +168,4 @@ def Predict_(index,dims=96):
       # showing results
       pp.show_keypoints(image.squeeze(),pred.squeeze())
       return pred,image,roi
-pred,image,roi = Predict_(100)
-Plot_results(model,hist,accuracy)
+pred,image,roi = Predict_(0)
