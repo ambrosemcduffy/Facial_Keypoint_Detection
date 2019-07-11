@@ -19,7 +19,7 @@ cas_path = "data/detector_architectures/haarcascade_frontalface_default.xml"
 # Validation set on my face...
 validation_path = "data/valid/chadwick/"
 dims = 96
-def Model(dims=96,batch_size=16,epochs=5):
+def Model(dims=96,batch_size=32,epochs=5):
       '''
       Fuction that runs Vgg16 architecture until it's optimize
       '''
